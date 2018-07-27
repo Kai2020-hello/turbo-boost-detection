@@ -1,27 +1,14 @@
-# Mask-RCNN
-### A PyTorch Implementation (multi-gpu), adaption from a public [repository](https://github.com/multimodallearning/pytorch-mask-rcnn).
+## Turbo-boosting Object Detector
 
 
-
-
-
-```Shell
-This is a Pytorch implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) that is in large parts
-based on Matterport's [Mask_RCNN](https://github.com/matterport/Mask_RCNN). Matterport's repository
-is an implementation on Keras and TensorFlow. The following parts of the README are excerpts from the Matterport README.
-Details on the requirements, training on MS COCO and detection results for this repository can be found
-at the end of the document. The Mask R-CNN model generates bounding boxes and segmentation masks
-for each instance of an object in the image. It's based on Feature Pyramid Network (FPN) and a ResNet101 backbone.
-```
-
-
-
+A PyTorch Implementation, originally forked from a public
+[repository](https://github.com/multimodallearning/pytorch-mask-rcnn) based on Mask-RCNN.
 
 
 ## Installation
 1. Clone this repository.
 
-        git clone --recursive https://github.com/hli2020/pytorch-mask-rcnn.git
+        git clone --recursive https://github.com/hli2020/turbo-boost-detection.git
 
     
 2. We use functions from two more repositories that need to be build with the right `--arch` option for cuda support.
