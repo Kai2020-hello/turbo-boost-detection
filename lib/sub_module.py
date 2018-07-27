@@ -1,5 +1,5 @@
 from lib.layers import pyramid_roi_align
-from lib.roialign.roi_align.crop_and_resize import CropAndResizeFunction
+from lib.roi_align import CropAndResizeFunction
 import torch.nn.functional as F
 from tools.utils import *
 from .OT_module import OptTrans
