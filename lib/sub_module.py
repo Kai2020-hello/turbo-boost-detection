@@ -1,5 +1,6 @@
 from lib.layers import pyramid_roi_align
-from lib.roi_align import CropAndResizeFunction
+from lib.roi_align.crop_and_resize import CropAndResizeFunction
+from lib.roi_pooling.roi_pool import RoIPoolFunction
 import torch.nn.functional as F
 from tools.utils import *
 from .OT_module import OptTrans
@@ -296,6 +297,9 @@ class Dev(nn.Module):
         self.config = config
         self.dis_upsample = config.DEV.DIS_UPSAMPLER
         self.structure = config.DEV.STRUCTURE
+        self.roi_type = config.ROIS.METHOD
+        if self.roi_type == 'roi_pool':
+            self.roi_spatial_scale = [1./4, 1./8, 1./16, 1./32]
 
         if self.use_dev:
             # for now it's the same size with mask_pool_size (14)
@@ -374,14 +378,18 @@ class Dev(nn.Module):
         return big_ix
 
     def forward(self, x, rois, roi_cls_gt=None):
-        # x is a multi-scale List containing Variable
-        # rois: [bs, 200, 4]
+        # x is a multi-scale List containing Variable (feature maps)
+        # rois: [bs, 200, 4], normalized, y1, x1, y2, x2
         base = self.config.ROIS.ASSIGN_ANCHOR_BASE
+
+        # fixme: roi-pool not below
         if not self.use_dev:
             # in 'layers.py'
             pooled_out = pyramid_roi_align([rois] + x, self.pool_size, self.image_shape, base=base)
             mask_out = pyramid_roi_align([rois] + x, self.mask_pool_size, self.image_shape, base=base)
             feat_out = None
+
+        # fixme: roi-pool not below
         elif self.structure == 'alpha':
             # used for splitting train and test
             train_phase = False if roi_cls_gt is None else True
@@ -664,9 +672,14 @@ class Dev(nn.Module):
                         # _idx = i if self.config.DEV.MULTI_UPSAMPLER else 0
                         # _feat_maps = self.upsample[_idx](curr_feat_maps)
                         _feat_maps = curr_feat_maps
-                        # shape: say 20, 256, 14, 14
-                        big_feat_pooled = CropAndResizeFunction(
-                            self.feat_pool_size, self.feat_pool_size)(_feat_maps, big_boxes, big_box_ind)
+                        # big_feat_pooled shape: say 20, 256, 14, 14
+                        if self.roi_type == 'roi_align':
+                            big_feat_pooled = CropAndResizeFunction(
+                                self.feat_pool_size, self.feat_pool_size)(_feat_maps, big_boxes, big_box_ind)
+                        elif self.roi_type == 'roi_pool':
+                            big_feat_pooled = RoIPoolFunction(
+                                self.feat_pool_size, self.feat_pool_size, self.roi_spatial_scale[i]
+                            )(_feat_maps, self._make_roi_pool_box_input(big_boxes, big_box_ind))
 
                         # shape: say 20, 1024, 1, 1
                         _big_out_before_last = self.feat_extract(big_feat_pooled)
@@ -712,15 +725,26 @@ class Dev(nn.Module):
                 # _feat_maps = curr_feat_maps
                 assert small_boxes.max().data[0] <= 1.0
 
-                # shape: say 473, 256, 7, 7
-                pooled_features = CropAndResizeFunction(
-                    self.pool_size, self.pool_size)(_feat_maps, small_boxes, box_ind)
+                # pooled_features shape: say 473, 256, 7, 7
+                if self.roi_type == 'roi_align':
+                    pooled_features = CropAndResizeFunction(
+                        self.pool_size, self.pool_size)(_feat_maps, small_boxes, box_ind)
+                elif self.roi_type == 'roi_pool':
+                    pooled_features = RoIPoolFunction(
+                        self.pool_size, self.pool_size, self.roi_spatial_scale[i]
+                    )(_feat_maps, self._make_roi_pool_box_input(small_boxes, box_ind))
                 pooled.append(pooled_features)
+
                 # mask and feat features are shared with a RoI
                 # since the output size is the same (mask_pool_size=feat_pool_size)
-                # shape: say 473, 256, 14, 14
-                mask_and_feat = CropAndResizeFunction(
-                    self.mask_pool_size, self.mask_pool_size)(_feat_maps, small_boxes, box_ind)
+                # mask_and_feat shape: say 473, 256, 14, 14
+                if self.roi_type == 'roi_align':
+                    mask_and_feat = CropAndResizeFunction(
+                        self.mask_pool_size, self.mask_pool_size)(_feat_maps, small_boxes, box_ind)
+                elif self.roi_type == 'roi_pool':
+                    mask_and_feat = RoIPoolFunction(
+                        self.mask_pool_size, self.mask_pool_size, self.roi_spatial_scale[i]
+                    )(_feat_maps, self._make_roi_pool_box_input(small_boxes, box_ind))
                 mask.append(mask_and_feat)
 
                 # Deal with 'small' boxes during train and test
@@ -829,6 +853,13 @@ class Dev(nn.Module):
                 # left: 1024 x 81; right result: 1024 x 1 x 1; no need to squeeze the right result
                 feat[:, cls_ind] = torch.mean(input_feat[_idx, :], dim=0)
         return feat, cnt
+
+    def _make_roi_pool_box_input(self, boxes, box_ind):
+        # For each ROI R = [batch_index x1 y1 x2 y2]: max pool over R
+        boxes *= float(self.image_shape[0])
+        _y1, _x1, _y2, _x2 = boxes.chunk(4, dim=1)
+        new_input = torch.stack([box_ind.float().unsqueeze(1), _x1, _y1, _x2, _y2], dim=1).squeeze()
+        return new_input
 
 
 ############################################################

@@ -9,6 +9,13 @@
 #           -gencode arch=compute_61,code=sm_61 \
 #	   -gencode arch=compute_70,code=sm_70 "
 
+#    | GPU | arch |
+#    | --- | --- |
+#    | TitanX | sm_52 |
+#    | GTX 960M | sm_50 |
+#    | GTX 1070 | sm_61 |
+#    | GTX 1080 (Ti) | sm_61 |
+
 echo 'setup coco eval ...'
 cd datasets/eval/PythonAPI
 make

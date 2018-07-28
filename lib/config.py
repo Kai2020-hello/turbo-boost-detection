@@ -145,8 +145,7 @@ class Config(object):
     # Eqn.(1) in FPN paper
     # useless when DEV.ASSIGN_BOX_ON_ALL_SCALE is True
     ROIS.ASSIGN_ANCHOR_BASE = 224.
-    # TODO: incorporate regular roi_pooling
-    ROIS.METHOD = 'roi_align'
+    ROIS.METHOD = 'roi_align'  # or roi_pool
 
     # ==================================
     TEST = AttrDict()
@@ -420,6 +419,8 @@ class CocoConfig(Config):
             # self.DEV.CLS_MERGE_MANNER = 'linear_add'
             self.TRAIN.FPN_OT_LOSS = True
             self.TRAIN.FPN_OT_LOSS_FAC = .1
+
+            self.ROIS.METHOD = 'roi_pool'
 
             # self.DEV.BASELINE = True  # apply up-sampling op. in original Mask-RCNN
             # self.DEV.MULTI_UPSAMPLER = False

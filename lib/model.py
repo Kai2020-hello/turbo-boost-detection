@@ -251,6 +251,8 @@ class MaskRCNN(nn.Module):
 
     def forward(self, input, mode, do_meta=False):
         """forward function of the Mask-RCNN network
+            input: data
+            mode: train or test
             do_meta (not used for now):
                 only affects the very few iterations during train under meta-loss case
         """
@@ -359,6 +361,7 @@ class MaskRCNN(nn.Module):
             # 2. compute DET targets
             # _rois shape: bs x TRAIN_ROIS_PER_IMAGE (say 200) x 4; zero padded
             # target_class_ids: bs, 200
+            # TODO: roi-pool below
             _rois, target_class_ids, target_deltas, target_mask = \
                 prepare_det_target(_proposals.detach(), gt_class_ids, gt_boxes / scale, gt_masks, self.config)
             if self.config.CTRL.PROFILE_ANALYSIS:
