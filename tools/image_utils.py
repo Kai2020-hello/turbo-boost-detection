@@ -105,6 +105,7 @@ def resize_image(image, min_dim=None, max_dim=None, padding=False):
         image = scipy.misc.imresize(
             image, (round(h * scale), round(w * scale)))
     # Need padding?
+    # SUPER IMPORTANT: all images are forced to resize to MAX_DIM via padding
     if padding:
         # Get new height and width
         h, w = image.shape[:2]
