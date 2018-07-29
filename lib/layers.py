@@ -1,4 +1,5 @@
 from lib.roi_align.crop_and_resize import CropAndResizeFunction
+from lib.roi_pooling.roi_pool import RoIPoolFunction
 from lib.nms.nms_wrapper import nms
 from lib.workflow import SEE_ONE_EXAMPLE, EXAMPLE_COCO_IND
 from tools.box_utils import *
@@ -141,7 +142,7 @@ def proposal_layer(inputs, proposal_count, nms_threshold, priors, config=None):
 
 
 ############################################################
-#  ROIAlign Layer
+#  ROIAlign Layer (used in the "if not self.use_dev:" branch, which is parallel to "alpha" and "beta" version)
 ############################################################
 def pyramid_roi_align(inputs, pool_size, image_shape, base=224.):
     """Implements ROI Pooling on multiple levels of the feature pyramid.
@@ -312,6 +313,8 @@ def generate_roi(config, proposals, gt_class_ids, gt_boxes, gt_masks):
             x2 = (x2 - gt_x1) / gt_w
             boxes = torch.cat([y1, x1, y2, x2], dim=1)
 
+        # box_ids ranges from 0 to the number of masks
+        # UPDATE: no need to fixme if switched to roi_pool method; since mask branch is for segmentation
         box_ids = Variable(torch.arange(roi_masks.size(0)), requires_grad=False).cuda().int()
         masks = Variable(
             CropAndResizeFunction(config.MRCNN.MASK_SHAPE[0], config.MRCNN.MASK_SHAPE[1])
@@ -398,7 +401,7 @@ def prepare_det_target(proposals, gt_class_ids, gt_boxes, gt_masks, config):
         MAX_GT_NUM <= config.MAX_GT_INSTANCES: it's the max_gt_num within this batch
 
     Returns:
-        rois:               [batch, TRAIN_ROIS_PER_IMAGE, (y1, x1, y2, x2)] in normalized coordinates
+        rois_out:           [batch, TRAIN_ROIS_PER_IMAGE, (y1, x1, y2, x2)] in normalized coordinates
         target_class_ids:   [batch, TRAIN_ROIS_PER_IMAGE]. Integer class IDs.
         target_deltas:      [batch, TRAIN_ROIS_PER_IMAGE, NUM_CLASSES, (dy, dx, log(dh), log(dw), class_id)]
                                 Class-specific bbox refinements.

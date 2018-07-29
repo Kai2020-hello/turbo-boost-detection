@@ -11,16 +11,9 @@ A PyTorch Implementation, originally forked from a public
         git clone --recursive https://github.com/hli2020/turbo-boost-detection.git
 
     
-2. We use functions from two more repositories that need to be build with the right `--arch` option for cuda support.
-The two functions are Non-Maximum Suppression from ruotianluo's [pytorch-faster-rcnn](https://github.com/ruotianluo/pytorch-faster-rcnn)
-repository and longcw's [RoiAlign](https://github.com/longcw/RoIAlign.pytorch).
-
-    | GPU | arch |
-    | --- | --- |
-    | TitanX | sm_52 |
-    | GTX 960M | sm_50 |
-    | GTX 1070 | sm_61 |
-    | GTX 1080 (Ti) | sm_61 |
+2. We use functions from other repositories that need to be build with the right `--arch` option for cuda support.
+The functions are Non-Maximum Suppression from ruotianluo's [pytorch-faster-rcnn](https://github.com/ruotianluo/pytorch-faster-rcnn)
+repository and longcw's [RoiAlign](https://github.com/longcw/RoIAlign.pytorch) and RoiPool. Thanks to them!
 
         sh setup.sh
 
@@ -33,20 +26,14 @@ create a symlink.
 4. Download the pretrained models on COCO and ImageNet from
 [Google Drive](https://drive.google.com/open?id=1LXUgC2IZUYNEoXr05tdqyKFZY0pZyPDc).
 
-## Demo
 
-To test your installation simply run the demo with
-
-    python demo.py
-
-
-![](assets/park.png)
-
-## Training on COCO
+## Train on COCO
 See the `script` folder to get a sense of training/evaluation commands in terminal.
 
 The training schedule, learning rate, and other parameters can be set in the `class`
 object of `CocoConfig` in `lib/config.py`.
+
+        sh script/base_8gpu.sh 105/meta_105_quick_1_roipool
 
 ## Results
 
@@ -59,8 +46,9 @@ with the default configuration and backbone initialized with pretrained
 | bbox | TODO | 0.347 | 0.347 | 0.382 |
 | segm | TODO | 0.296 | 0.296 | 0.354 |
 
+**Results above are from the original forked repo.**
 
-#### Annoying warning
+### Annoying warning
 ``~/anaconda3/lib/python3.6/site-packages/scipy/ndimage/interpolation.py:616``
 
 Also install the `future` package via conda:

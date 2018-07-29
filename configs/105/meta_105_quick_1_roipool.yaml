@@ -4,6 +4,8 @@ TRAIN:
   END2END: False
   BATCH_SIZE: 4
   DO_VALIDATION: True
+ROIS:
+  METHOD: 'roi_pool'
 DATA:
   IMAGE_MIN_DIM: 800
   IMAGE_MAX_DIM: 1024
@@ -22,5 +24,5 @@ CTRL:
 MISC:
   USE_VISDOM: True
   VIS:
-    PORT: 2035
+    PORT: 2042
 
