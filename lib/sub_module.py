@@ -643,6 +643,8 @@ class Dev(nn.Module):
                         big_cnt.append(Variable(torch.zeros(1, self.num_classs).cuda(), requires_grad=False))
                         big_loss.append(Variable(torch.zeros(1).cuda()))
                     continue
+                #import pdb 
+                #pdb.set_trace()
 
                 # Decide "big_ix"; deal with 'big' boxes during train
                 if train_phase and not self.config.DEV.BASELINE:
