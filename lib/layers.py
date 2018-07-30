@@ -1,5 +1,5 @@
 from lib.roi_align.crop_and_resize import CropAndResizeFunction
-from lib.roi_pooling.roi_pool import RoIPoolFunction
+from lib.roi_pooling.functions.roi_pool import RoIPoolFunction
 from lib.nms.nms_wrapper import nms
 from lib.workflow import SEE_ONE_EXAMPLE, EXAMPLE_COCO_IND
 from tools.box_utils import *

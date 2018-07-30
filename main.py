@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--config_file',
                         default=None)
-                        # default='configs/meta_101_quick_3_l1_sig_multi.yaml')
+                        # default='configs/105/meta_105_quick_1_roipool.yaml')
                         # default='configs/meta_101_quick_3.yaml')
 
     # debug mode: set train_data to val_data for faster data loading.
