@@ -1,6 +1,6 @@
 from lib.layers import pyramid_roi_align
 from lib.roi_align.crop_and_resize import CropAndResizeFunction
-from lib.roi_pooling.roi_pool import RoIPoolFunction
+from lib.roi_pooling.functions.roi_pool import RoIPoolFunction
 import torch.nn.functional as F
 from tools.utils import *
 from .OT_module import OptTrans
@@ -298,8 +298,8 @@ class Dev(nn.Module):
         self.dis_upsample = config.DEV.DIS_UPSAMPLER
         self.structure = config.DEV.STRUCTURE
         self.roi_type = config.ROIS.METHOD
-        if self.roi_type == 'roi_pool':
-            self.roi_spatial_scale = [1./4, 1./8, 1./16, 1./32]
+        # if self.roi_type == 'roi_pool':
+        self.roi_spatial_scale = [1./4, 1./8, 1./16, 1./32]
 
         if self.use_dev:
             # for now it's the same size with mask_pool_size (14)
@@ -644,7 +644,7 @@ class Dev(nn.Module):
                         big_loss.append(Variable(torch.zeros(1).cuda()))
                     continue
 
-                # Decide "big_ix"; deal with 'big' boxes during train
+                # TRAIN ONLY: Decide "big_ix"; deal with 'big' boxes
                 if train_phase and not self.config.DEV.BASELINE:
                     if not self.config.DEV.ASSIGN_BOX_ON_ALL_SCALE:
                         big_ix = self._find_big_box2(level, roi_level)
@@ -732,9 +732,12 @@ class Dev(nn.Module):
                     pooled_features = CropAndResizeFunction(
                         self.pool_size, self.pool_size)(_feat_maps, small_boxes, box_ind)
                 elif self.roi_type == 'roi_pool':
+                    _input = self._make_roi_pool_box_input(small_boxes, box_ind)
                     pooled_features = RoIPoolFunction(
                         self.pool_size, self.pool_size, self.roi_spatial_scale[i]
-                    )(_feat_maps, self._make_roi_pool_box_input(small_boxes, box_ind))
+                    )(_feat_maps, _input)
+                # print(pooled_features_align.sum().data[0])
+                # print(pooled_features_pool.sum().data[0])
                 pooled.append(pooled_features)
 
                 # mask and feat features are shared with a RoI
@@ -746,7 +749,7 @@ class Dev(nn.Module):
                 elif self.roi_type == 'roi_pool':
                     mask_and_feat = RoIPoolFunction(
                         self.mask_pool_size, self.mask_pool_size, self.roi_spatial_scale[i]
-                    )(_feat_maps, self._make_roi_pool_box_input(small_boxes, box_ind))
+                    )(_feat_maps, _input)
                 mask.append(mask_and_feat)
 
                 # Deal with 'small' boxes during train and test
@@ -858,10 +861,9 @@ class Dev(nn.Module):
 
     def _make_roi_pool_box_input(self, boxes, box_ind):
         # For each ROI R = [batch_index x1 y1 x2 y2]: max pool over R
-        boxes *= float(self.image_shape[0])
-        # boxes -= 1.
-        # boxes = torch.floor(boxes)
-        _y1, _x1, _y2, _x2 = boxes.chunk(4, dim=1)
+        boxes_new = boxes * float(self.image_shape[0])
+        # boxes *= float(self.image_shape[0])
+        _y1, _x1, _y2, _x2 = boxes_new.chunk(4, dim=1)
         new_input = torch.stack([box_ind.float().unsqueeze(1), _x1, _y1, _x2, _y2], dim=1).squeeze(dim=-1)
         return new_input
 
