@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import argparse
 from lib.config import CocoConfig
 from lib.workflow import train_model, test_model
@@ -5,6 +6,11 @@ from datasets.dataset_coco import get_data
 from tools.visualize import Visualizer
 from lib.model import MaskRCNN
 from tools.utils import *
+=======
+import os
+import pickle
+import torch
+>>>>>>> 0575d5d3a86c05dc2cf81735a61779d142922e79
 
 
 # GET FEATURE DATA
@@ -15,6 +21,7 @@ def prepare_feature(choice):
     return data
 
 
+<<<<<<< HEAD
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Mask R-CNN')
@@ -109,3 +116,5 @@ if __name__ == '__main__':
 
 
 
+=======
+>>>>>>> 0575d5d3a86c05dc2cf81735a61779d142922e79
