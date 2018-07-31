@@ -676,7 +676,7 @@ def conduct_nms(class_ids, refined_rois, class_scores, keep, config):
         refined_rois    [1000 4]
         class_scores    [1000]
         keep            [True, False, ...] altogether 1000
-        config
+        config          config
     Returns:
         detection:      [DET_MAX_INSTANCES, (y1, x1, y2, x2, class_id, class_score)]
     """
@@ -714,6 +714,7 @@ def conduct_nms(class_ids, refined_rois, class_scores, keep, config):
     # Keep top detections
     roi_count = config.TEST.DET_MAX_INSTANCES
     top_ids = class_scores[nms_indx].sort(descending=True)[1][:roi_count]
+    # final_index is the true index among the input samples (say 1000)
     final_index = nms_indx[top_ids].squeeze()
 
     # Arrange output as [DET_MAX_INSTANCES, (y1, x1, y2, x2, class_id, score)]
@@ -721,26 +722,33 @@ def conduct_nms(class_ids, refined_rois, class_scores, keep, config):
     detections = torch.cat((refined_rois[final_index],
                             class_ids[final_index].unsqueeze(1).float(),
                             class_scores[final_index].unsqueeze(1)), dim=1)
-    return detections
+    return detections, final_index
 
 
-def detection_layer(rois, probs, deltas, windows, config):
+def detection_layer(rois, probs, deltas, windows, config, feature=None, small_feat_gt=None):
     """Takes classified proposal boxes and their bounding box deltas and
     returns the final detection boxes.
 
     Args:
-        config
         rois:                   [bs, 1000 (just an example), 4 (y1, x1, y2, x2)], in normalized coordinates
         probs (mrcnn_class):    [bs*1000, 81]
         deltas (mrcnn_bbox):    [bs*1000, 81, 4], (dy, dx, log(dh), log(dw))
         windows:                [bs, 4] Variable, (y1, x1, y2, x2) in image coordinates;
                                     The part of the image that contains the image excluding the padding.
+        config
+        feature:                [bs*1000, 1024]
+        DEPRECATED small_feat_gt: [bs*1000]
     Returns:
         detections:             [batch, num_detections, (y1, x1, y2, x2, class_id, class_score)]
     """
     bs = rois.size(0)
     box_num_per_sample = rois.size(1)
+    # init detections (result) all zeros
     detections = Variable(torch.zeros(bs, config.TEST.DET_MAX_INSTANCES, 6).cuda(), volatile=True)
+    output_feat = None
+    if feature is not None:
+        feat_dim = feature.size(1)
+        output_feat = Variable(torch.zeros(bs, config.TEST.DET_MAX_INSTANCES, feat_dim).cuda(), volatile=True)
 
     # Class IDs per ROI
     class_scores, class_ids = torch.max(probs, dim=1)
@@ -770,7 +778,7 @@ def detection_layer(rois, probs, deltas, windows, config):
     # Round and cast to int since we're dealing with pixels now
     refined_rois = torch.round(refined_rois)
 
-    # Filter out background boxes, low confidence boxes and zero area boxes
+    # **FILTER OUT** background boxes, low confidence boxes and zero area boxes
     box_area = (refined_rois[:, 0] - refined_rois[:, 2])*(refined_rois[:, 1] - refined_rois[:, 3])
     keep_bool = (class_ids > 0) & (class_scores >= config.TEST.DET_MIN_CONFIDENCE) & (box_area > 0)
 
@@ -785,15 +793,21 @@ def detection_layer(rois, probs, deltas, windows, config):
         curr_keep_bool = keep_bool[curr_start:curr_end]
         if torch.sum(curr_keep_bool.long()).data[0] == 0:
             continue
-        curr_dets = conduct_nms(class_ids[curr_start:curr_end],
-                                refined_rois[curr_start:curr_end, :],
-                                class_scores[curr_start:curr_end],
-                                curr_keep_bool,
-                                config)
+
+        curr_dets, final_index = conduct_nms(
+            class_ids[curr_start:curr_end],
+            refined_rois[curr_start:curr_end, :],
+            class_scores[curr_start:curr_end],
+            curr_keep_bool,
+            config)
         actual_dets_num = curr_dets.size(0)
         detections[i, :actual_dets_num, :] = curr_dets
 
-    return detections
+        if feature is not None:
+            temp = feature[curr_start:curr_end]  # 1000 x 1024 (feat_dim)
+            output_feat[i, :actual_dets_num] = temp[final_index]
+
+    return detections, output_feat
 
 
 ############################################################

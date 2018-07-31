@@ -11,19 +11,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Mask R-CNN')
 
     parser.add_argument('--phase',
-                        default='train',
+                        # default='train',
                         # default='inference',
+                        default='visualize',          # it is inference
                         help='train or inference')
 
     parser.add_argument('--config_name',
                         required=False,
-                        # default='')
-                        default='local_pc_beta_1.3')
+                        default='')
+                        # default='remote_debug_1')
+                        # default='local_pc_beta_1.3')
                         # default='base_101_quick')
 
     parser.add_argument('--config_file',
-                        default=None)
-                        # default='configs/105/meta_105_quick_1_roipool.yaml')
+                        # default=None)
+                        default='configs/105/meta_105_quick_1_roipool.yaml')
                         # default='configs/meta_101_quick_3.yaml')
 
     # debug mode: set train_data to val_data for faster data loading.
@@ -89,7 +91,7 @@ if __name__ == '__main__':
         train_model(model, train_data, val_data,
                     optimizer=optimizer, layers='all', coco_api=val_api, vis=vis)
 
-    elif args.phase == 'inference':
+    elif args.phase == 'inference' or args.phase == 'visualize':
 
         test_model(model, val_data, val_api, during_train=False, vis=vis)
     else:

@@ -252,7 +252,7 @@ class MaskRCNN(nn.Module):
     def forward(self, input, mode, do_meta=False):
         """forward function of the Mask-RCNN network
             input: data
-            mode: train or test
+            mode: train, inference, visualize
             do_meta (not used for now):
                 only affects the very few iterations during train under meta-loss case
         """
@@ -263,7 +263,7 @@ class MaskRCNN(nn.Module):
         curr_coco_im_id = input[-1][:, -1]
 
         # set model state
-        if mode == 'inference':
+        if mode == 'inference' or 'visualize':
             _proposal_cnt = self.config.RPN.POST_NMS_ROIS_INFERENCE
             self.eval()
         elif mode == 'train':
@@ -316,11 +316,14 @@ class MaskRCNN(nn.Module):
         if mode == 'inference':
 
             assert _proposals.sum().data[0] != 0
+
             _pooled_cls, _, _feat_out_test = self.dev_roi(_mrcnn_feature_maps, _proposals)
+
             if self.config.DEV.STRUCTURE == 'beta':
                 small_output_all, small_gt_all = _feat_out_test
             else:
                 small_output_all, small_gt_all = None, None
+
             _, mrcnn_class, mrcnn_bbox = self.classifier(_pooled_cls, small_output_all, small_gt_all)
 
             # Detections
@@ -341,6 +344,28 @@ class MaskRCNN(nn.Module):
                 sample_per_gpu, -1, mrcnn_mask.size(1), mrcnn_mask.size(2), mrcnn_mask.size(3))
 
             return [detections, mrcnn_mask]
+
+        elif mode == 'visualize':
+
+            assert _proposals.sum().data[0] != 0
+
+            _pooled_cls, _, _feat_out_test = self.dev_roi(_mrcnn_feature_maps, _proposals)
+
+            if self.config.DEV.STRUCTURE == 'beta':
+                small_output_all, small_gt_all = _feat_out_test
+            else:
+                small_output_all, small_gt_all = None, None
+
+            feature, mrcnn_class, mrcnn_bbox = self.classifier(_pooled_cls, small_output_all, small_gt_all)
+
+            # Detections
+            # input[1], image_metas, (3, 90), Variable
+            _, _, windows, _, _ = parse_image_meta(input[1])
+            # output is [batch, num_detections (say 100), (y1, x1, y2, x2, class_id, score)] in image coordinates
+            detections, out_feat = detection_layer(_proposals, mrcnn_class, mrcnn_bbox, windows, self.config,
+                                                   feature, small_gt_all)
+            # NO MASK BRANCH
+            return [detections, out_feat]
 
         elif mode == 'train':
 
@@ -444,5 +469,5 @@ class MaskRCNN(nn.Module):
                    big_feat, big_cnt, small_feat, small_cnt, big_loss, \
                    small_output_all, small_gt_all, \
                    fpn_ot_loss
-
+        # END TRAIN
 

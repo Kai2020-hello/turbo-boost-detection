@@ -764,6 +764,7 @@ class Dev(nn.Module):
                     _start_ind = small_out_cnt
                     _small_num = small_index.size(0)
                     small_output_all[_start_ind:_small_num+_start_ind, :] = small_output
+                    # TODO: does it match the indices? (8 x 10000 -> 8000)
 
                     if train_phase:
                         small_box_gt = roi_cls_gt[small_index[:, 0].data, small_index[:, 1].data]
@@ -919,7 +920,11 @@ class Classifier(nn.Module):
         mrcnn_bbox = self.linear_bbox(x)
         mrcnn_bbox = mrcnn_bbox.view(mrcnn_bbox.size(0), -1, 4)
 
-        return [mrcnn_class_logits, mrcnn_probs, mrcnn_bbox]
+        if self.config.CTRL.PHASE == 'visualize':
+            return [x, mrcnn_probs, mrcnn_bbox]
+        else:
+            # for train and inference
+            return [mrcnn_class_logits, mrcnn_probs, mrcnn_bbox]
 
 
 class Mask(nn.Module):

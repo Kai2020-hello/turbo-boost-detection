@@ -319,7 +319,10 @@ class Config(object):
 
         if self.MISC.USE_VISDOM:
             if self.CTRL.DEBUG:
-                self.MISC.VIS.PORT = 8097  # debug
+                # self.MISC.VIS.PORT = 8097  # debug
+                # TODO: debug remotely on s42
+                self.MISC.VIS.PORT = 2042
+
             assert self.MISC.VIS.PORT > 0, 'vis_port not designated!!!'
 
             print('\n[visdom is activated] remember to execute '
@@ -380,7 +383,8 @@ class CocoConfig(Config):
 
         _ignore_yaml = False
         # ================ (CUSTOMIZED CONFIG) =========================
-        if args.config_name.startswith('local_pc'):
+        if args.config_name.startswith('local_pc') \
+                or args.config_name.startswith('remote_debug_1'):
 
             # debug mode on local pc
             # self.CTRL.PROFILE_ANALYSIS = True
