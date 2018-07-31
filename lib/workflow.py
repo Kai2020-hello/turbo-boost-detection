@@ -340,11 +340,12 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
         now = datetime.datetime.now()
         print_log('\n[Inference during train] Start timestamp: {:%Y%m%dT%H%M}'.format(now), file=log_file, init=True)
     else:
-        # validation-only case
+        # validation/visualization case
         model_file_name = os.path.basename(model.config.MODEL.INIT_MODEL)
-        mode = model.config.CTRL.PHASE
+        mode = model.config.CTRL.PHASE   # could be inference or visualize
         log_file = model.config.MISC.LOG_FILE
         det_res_file = model.config.MISC.DET_RESULT_FILE
+        vis_res_folder = model.config.MISC.VIS_RESULT_FOLDER
         train_log_file = None
         save_im_folder = model.config.MISC.SAVE_IMAGE_DIR if model.config.TEST.SAVE_IM else None
 
@@ -362,14 +363,14 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
     t_prediction = 0
     t_start = time.time()
 
-    if os.path.exists(det_res_file):
+    if model.config == 'inference' and os.path.exists(det_res_file):
         print_log('results file: {} exists, skip inference and directly evaluate ...'.format(det_res_file),
                   log_file, additional_file=train_log_file)
         results = torch.load(det_res_file)['det_result']
     else:
         print_log("Running COCO evaluation on {} images.".format(num_test_im), log_file, additional_file=train_log_file)
         assert (num_test_im % test_bs) % model.config.MISC.GPU_COUNT == 0, \
-            '[INFERENCE] last mini-batch in an epoch is not divisible by gpu number.'
+            '[INFERENCE/VISUALIZE] last mini-batch in an epoch is not divisible by gpu number.'
 
         results, cnt = [], 0
         total_iter = math.ceil(num_test_im / test_bs)
@@ -387,31 +388,50 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
             molded_images, image_metas, windows, images = _mold_inputs(model, curr_image_ids, dataset)
 
             # FORWARD PASS
-            # detections: 8,100,6; mrcnn_mask: 8,100,81,28,28
-            detections, mrcnn_mask = input_model([molded_images, image_metas], mode=mode)
+            if mode == 'inference':
+                # detections: 8,100,6; mrcnn_mask: 8,100,81,28,28
+                detections, mrcnn_mask = input_model([molded_images, image_metas], mode=mode)
+            elif mode == 'visualize':
+                # out_feat: 8,100,1024
+                detections, out_feat = input_model([molded_images, image_metas], mode=mode)
+                out_feat = out_feat.data.cpu().numpy()
 
             # Convert to numpy
             detections = detections.data.cpu().numpy()
-            mrcnn_mask = mrcnn_mask.permute(0, 1, 3, 4, 2).contiguous().data.cpu().numpy()
+            if mode == 'inference':
+                mrcnn_mask = mrcnn_mask.permute(0, 1, 3, 4, 2).contiguous().data.cpu().numpy()
 
             # LOOP for each image within this batch
             for i, image in enumerate(images):
-                curr_coco_id = coco_image_ids[curr_image_ids[i]]
 
-                final_rois, final_class_ids, final_scores, final_masks = _unmold_detections(
-                    detections[i], mrcnn_mask[i], image.shape, windows[i])
+                curr_coco_id = coco_image_ids[curr_image_ids[i]]
+                input_value = mrcnn_mask[i] if mode == 'inference' else out_feat[i]
+
+                final_rois, final_class_ids, final_scores, output_value = _unmold_detections(
+                    detections[i], input_value, image.shape, windows[i], mode == 'inference')
 
                 if final_rois is None:
                     continue
                 for det_id in range(final_rois.shape[0]):
                     bbox = np.around(final_rois[det_id], 1)
-                    curr_result = {
-                        "image_id":     curr_coco_id,
-                        "category_id":  dataset.get_source_class_id(final_class_ids[det_id], "coco"),
-                        "bbox":         [bbox[1], bbox[0], bbox[3] - bbox[1], bbox[2] - bbox[0]],
-                        "score":        final_scores[det_id],
-                        "segmentation": maskUtils.encode(np.asfortranarray(final_masks[:, :, det_id]))
-                    }
+                    if mode == 'inference':
+                        final_masks = output_value
+                        curr_result = {
+                            "image_id":     curr_coco_id,
+                            "category_id":  dataset.get_source_class_id(final_class_ids[det_id], "coco"),
+                            "bbox":         [bbox[1], bbox[0], bbox[3] - bbox[1], bbox[2] - bbox[0]],
+                            "score":        final_scores[det_id],
+                            "segmentation": maskUtils.encode(np.asfortranarray(final_masks[:, :, det_id]))
+                        }
+                    elif mode == 'visualize':
+                        final_feat = output_value
+                        curr_result = {
+                            "image_id": curr_coco_id,
+                            "category_id": dataset.get_source_class_id(final_class_ids[det_id], "coco"),
+                            "bbox": [bbox[1], bbox[0], bbox[3] - bbox[1], bbox[2] - bbox[0]],
+                            "score": final_scores[det_id],
+                            "feature": final_feat
+                        }
                     results.append(curr_result)
                 # visualize result if necessary
                 if model.config.TEST.SAVE_IM:
@@ -427,34 +447,48 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
 
             # show progress
             if iter_ind % show_test_progress_base == 0 or cnt == len(image_ids):
-                print_log('[{:s}][{:s}] evaluation progress \t{:4d} images /{:4d} total ...'.
-                          format(model.config.CTRL.CONFIG_NAME, model_file_name, cnt, len(image_ids)),
+                print_log('[{:s}][{:s}] {:s} progress \t{:4d} images /{:4d} total ...'.
+                          format(model.config.CTRL.CONFIG_NAME, model_file_name, mode, cnt, len(image_ids)),
                           log_file, additional_file=train_log_file)
+        # DONE with the WHOLE EVAL IMAGES
 
-        print_log("Prediction time: {:.4f}. Average {:.4f} sec/image".format(
+        print_log("Prediction time (inference or visualize): {:.4f}. Average {:.4f} sec/image".format(
             t_prediction, t_prediction / len(image_ids)), log_file, additional_file=train_log_file)
-        print_log('Saving results to {:s}'.format(det_res_file), log_file, additional_file=train_log_file)
-        torch.save({'det_result': results}, det_res_file)
 
-    # Evaluate
-    print('\nBegin to evaluate ...')
-    # Load results. This modifies results with additional attributes.
-    coco_results = coco_api.loadRes(results)
-    eval_type = "bbox"
-    coco_eval = COCOeval(coco_api, coco_results, eval_type)
-    coco_eval.params.imgIds = coco_image_ids
-    coco_eval.evaluate()
-    coco_eval.accumulate()
-    coco_eval.summarize(log_file)
-    mAP = coco_eval.stats[0]
+        if mode == 'inference':
+            print_log('Saving results to {:s}'.format(det_res_file), log_file, additional_file=train_log_file)
+            torch.save({'det_result': results}, det_res_file)
+        elif mode == 'visualize':
+            file_name = os.path.join(vis_res_folder, 'features.pth')
+            print_log('Saving results to {:s}'.format(file_name), log_file, additional_file=train_log_file)
+            torch.save({'feat_result': results}, file_name)
 
-    print_log('Total time: {:.4f}'.format(time.time() - t_start), log_file, additional_file=train_log_file)
-    print_log('Config_name [{:s}], model file [{:s}], mAP is {:.4f}\n\n'.
-              format(model.config.CTRL.CONFIG_NAME, model_file_name, mAP),
-              log_file, additional_file=train_log_file)
-    print_log('Done!', log_file, additional_file=train_log_file)
-    if model.config.MISC.USE_VISDOM:
-        vis.show_mAP(model_file=model_file_name, mAP=mAP)
+    SKIP_INFERENCE = True
+    if not SKIP_INFERENCE:
+        # Evaluate
+        print('\nBegin to evaluate ...')
+        # Load results. This modifies results with additional attributes.
+        coco_results = coco_api.loadRes(results)
+        eval_type = "bbox"
+        coco_eval = COCOeval(coco_api, coco_results, eval_type)
+        coco_eval.params.imgIds = coco_image_ids
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize(log_file)
+        mAP = coco_eval.stats[0]
+
+        print_log('Total time: {:.4f}'.format(time.time() - t_start), log_file, additional_file=train_log_file)
+        print_log('Config_name [{:s}], model file [{:s}], mAP is {:.4f}\n\n'.
+                  format(model.config.CTRL.CONFIG_NAME, model_file_name, mAP),
+                  log_file, additional_file=train_log_file)
+        print_log('Done!', log_file, additional_file=train_log_file)
+        if model.config.MISC.USE_VISDOM:
+            vis.show_mAP(model_file=model_file_name, mAP=mAP)
+
+    if mode == 'visualize':
+        # TSNE finally!
+        pass
+        # raise NotImplementedError
 
 
 def _mold_inputs(model, image_ids, dataset):
@@ -504,22 +538,29 @@ def _mold_inputs(model, image_ids, dataset):
     return molded_images, image_metas, windows, images
 
 
-def _unmold_detections(detections, mrcnn_mask, image_shape, window):
+def _unmold_detections(detections, input_value, image_shape, window, inference=True):
     """
         FOR EVALUATION ONLY.
         Re-formats the detections of one image from the format of the neural
         network output to a format suitable for use in the rest of the application.
 
-            detections:     [N, (y1, x1, y2, x2, class_id, score)]
-            mrcnn_mask:     [N, height, width, num_classes]
+            detections:     [100, (y1, x1, y2, x2, class_id, score)]
+            input_value:
+                            mrcnn_mask:     [100, height, width, num_classes]
+                            OR
+                            feature:        [100, 1025]
+
             image_shape:    [height, width, depth] Original size of the image before resizing
             window:         [y1, x1, y2, x2] Box in the image where the real image is excluding the padding.
 
         Returns:
-            boxes:          [N, (y1, x1, y2, x2)] Bounding boxes in pixels
+            boxes:          [N (<=100; actual no. of detections), (y1, x1, y2, x2)] Bounding boxes in pixels
             class_ids:      [N] Integer class IDs for each bounding box
             scores:         [N] Float probability scores of the class_id
-            masks:          [height, width, num_instances] Instance masks
+            output_value:
+                            masks:          [height, width, num_instances] Instance masks
+                            OR
+                            final_feature
     """
     # TODO: (low) consider the batch size dim
     # How many detections do we have?
@@ -531,7 +572,10 @@ def _unmold_detections(detections, mrcnn_mask, image_shape, window):
     boxes = detections[:N, :4]
     class_ids = detections[:N, 4].astype(np.int32)
     scores = detections[:N, 5]
-    masks = mrcnn_mask[np.arange(N), :, :, class_ids]
+    if inference:
+        masks = input_value[np.arange(N), :, :, class_ids]
+    else:
+        feature = input_value[:N]
 
     # Compute scale and shift to translate coordinates to image domain.
     h_scale = image_shape[0] / (window[2] - window[0])
@@ -544,7 +588,7 @@ def _unmold_detections(detections, mrcnn_mask, image_shape, window):
     # Translate bounding boxes to image domain
     boxes = np.multiply(boxes - shifts, scales).astype(np.int32)
 
-    # Filter out detections with zero area. Often only happens in early
+    # **FILTER OUT** detections with zero area. Often only happens in early
     # stages of training when the network weights are still a bit random.
     exclude_ix = np.where(
         (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
@@ -552,17 +596,25 @@ def _unmold_detections(detections, mrcnn_mask, image_shape, window):
         boxes = np.delete(boxes, exclude_ix, axis=0)
         class_ids = np.delete(class_ids, exclude_ix, axis=0)
         scores = np.delete(scores, exclude_ix, axis=0)
-        masks = np.delete(masks, exclude_ix, axis=0)
+        if inference:
+            masks = np.delete(masks, exclude_ix, axis=0)
+        else:
+            feature = np.delete(feature, exclude_ix, axis=0)
+
+    if inference:
         N = class_ids.shape[0]
+        # Resize masks to original image size and set boundary threshold.
+        full_masks = []
+        for i in range(N):
+            # Convert neural network mask to full size mask
+            full_mask = unmold_mask(masks[i], boxes[i], image_shape)
+            full_masks.append(full_mask)
+        full_masks = np.stack(full_masks, axis=-1)\
+            if full_masks else np.empty((0,) + masks.shape[1:3])
+        output_value = full_masks
+    else:
+        area = (boxes[:, 0] - boxes[:, 2]) * (boxes[:, 1] - boxes[:, 3]) / (image_shape[0]*image_shape[1])
+        output_value = np.concatenate((feature, np.expand_dims(area, axis=1)), axis=1)
 
-    # Resize masks to original image size and set boundary threshold.
-    full_masks = []
-    for i in range(N):
-        # Convert neural network mask to full size mask
-        full_mask = unmold_mask(masks[i], boxes[i], image_shape)
-        full_masks.append(full_mask)
-    full_masks = np.stack(full_masks, axis=-1)\
-        if full_masks else np.empty((0,) + masks.shape[1:3])
-
-    return boxes, class_ids, scores, full_masks
+    return boxes, class_ids, scores, output_value
 

@@ -289,7 +289,7 @@ def update_config_and_load_model(config, model, train_generator=None):
                 use_pretrain = True
 
         print('loading weights \t{:s}\n'.format(model_path))
-    elif phase == 'inference':
+    elif phase == 'inference' or 'visualize':
         del config.MODEL['PRETRAIN_COCO_MODEL']
         del config.MODEL['PRETRAIN_IMAGENET_MODEL']
 
@@ -299,44 +299,44 @@ def update_config_and_load_model(config, model, train_generator=None):
         elif os.path.exists(choice):
             model_path = choice
             print('use designated model for inference')
-        print('[{:s}] loading model weights\t{:s} for inference\n'.format(phase.upper(), model_path))
+        print('[{:s}] loading model weights\t{:s} for {}\n'.format(phase.upper(), model_path, phase.upper()))
 
     if not os.path.exists(model_path):
         raise Exception('For now we do not allow training from scratch!!!')
     # set MODEL.INIT_MODEL
     config.MODEL.INIT_MODEL = model_path
 
-    # 2. LOAD MODEL (resumed or pretrain)
+    # 2. LOAD MODEL (resumed or pretrain, all phases)
     checkpoints = torch.load(model_path)
     try:
         model.load_state_dict(checkpoints['state_dict'], strict=False)
     except KeyError:
         model.load_state_dict(checkpoints, strict=False)  # legacy reason or pretrain model
 
-    # 3. determine start_iter and epoch for resume
+    # 3. determine start_iter and epoch for resume or display (for all phases)
     # update network.start_epoch, network.start_iter
-    if phase == 'train':
-        try:
-            # indicate this is a resumed model
-            model.start_epoch = checkpoints['epoch']
-            model.start_iter = checkpoints['iter']
-            num_train_im = train_generator.dataset.dataset.num_images
-            iter_per_epoch = math.floor(num_train_im/config.TRAIN.BATCH_SIZE)
-            if model.start_iter % iter_per_epoch == 0:
-                model.start_iter = 1
-                model.start_epoch += 1
-            else:
-                model.start_iter += 1
-        except KeyError:
-            # indicate this is a pretrain model
-            model.start_epoch, model.start_iter = 1, 1
-        if config.TRAIN.FORCE_START_EPOCH:
-            model.start_epoch, model.start_iter = config.TRAIN.FORCE_START_EPOCH, 1
-        # init counters
-        model.epoch = model.start_epoch
-        model.iter = model.start_iter
+    try:
+        # indicate this is a resumed model
+        model.start_epoch = checkpoints['epoch']
+        model.start_iter = checkpoints['iter']
+        num_train_im = train_generator.dataset.dataset.num_images
+        iter_per_epoch = math.floor(num_train_im/config.TRAIN.BATCH_SIZE)
+        if model.start_iter % iter_per_epoch == 0:
+            model.start_iter = 1
+            model.start_epoch += 1
+        else:
+            model.start_iter += 1
+    except KeyError:
+        # indicate this is a pretrain model
+        model.start_epoch, model.start_iter = 1, 1
+    if config.TRAIN.FORCE_START_EPOCH:
+        model.start_epoch, model.start_iter = config.TRAIN.FORCE_START_EPOCH, 1
+    # init counters
+    model.epoch = model.start_epoch
+    model.iter = model.start_iter
 
-        # 3.1 load previous loss data in Visdom
+    if phase == 'train':
+        # 3.1 load previous loss data in Visdom (for train only)
         try:
             loss_data = checkpoints['loss_data']  # could be empty list [] or dict()
             # resumed model
@@ -378,13 +378,21 @@ def update_config_and_load_model(config, model, train_generator=None):
                 model.initialize_buffer(config.MISC.LOG_FILE)
                 # indicate this is a pretrain model; init buffer as instructed in config
 
-    elif phase == 'inference':
+    elif phase == 'inference' or phase == 'visualize':
+        tiny_diff = 'inference' if phase == 'inference' else 'visualize'
         model_name = os.path.basename(model_path).replace('.pth', '')   # mask_rcnn_ep_0053_iter_001234
         config.MISC.LOG_FILE = os.path.join(config.MISC.RESULT_FOLDER,
-                                            'inference_from_{:s}.txt'.format(model_name))
+                                            '{:s}_from_{:s}.txt'.format(tiny_diff, model_name))
         print_log('\nStart timestamp: {:%Y%m%dT%H%M}'.format(now), file=config.MISC.LOG_FILE, init=True)
         model_suffix = os.path.basename(model_path).replace('mask_rcnn_', '')
-        config.MISC.DET_RESULT_FILE = os.path.join(config.MISC.RESULT_FOLDER, 'det_result_{:s}'.format(model_suffix))
+
+        if phase == 'inference':
+            config.MISC.DET_RESULT_FILE = os.path.join(config.MISC.RESULT_FOLDER,
+                                                       'det_result_{:s}'.format(model_suffix))
+        elif phase == 'visualize':
+            # NOTE: it is called *folder*; not file!
+            config.MISC.VIS_RESULT_FOLDER = os.path.join(config.MISC.RESULT_FOLDER,
+                                                         'vis_result_{}'.format(model_suffix)).replace('.pth', '')
 
         if config.TEST.SAVE_IM:
             config.MISC.SAVE_IMAGE_DIR = os.path.join(config.MISC.RESULT_FOLDER, model_suffix.replace('.pth', ''))

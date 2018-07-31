@@ -562,6 +562,7 @@ class Visualizer(object):
             win=self.opt.MISC.VIS.TXT+2)
 
     def show_image(self, progress, others=None):
+        # TODO: not used for now
         """for test, print log info in console and show detection results on visdom"""
         if self.opt.phase == 'test':
             name = os.path.basename(os.path.dirname(self.opt.det_file))

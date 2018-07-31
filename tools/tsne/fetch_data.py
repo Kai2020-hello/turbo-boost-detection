@@ -6,6 +6,15 @@ from tools.visualize import Visualizer
 from lib.model import MaskRCNN
 from tools.utils import *
 
+
+# GET FEATURE DATA
+def prepare_feature(choice):
+    # case 1: pretrain model
+    if choice == 'first':
+        data = []
+    return data
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Mask R-CNN')
@@ -13,7 +22,6 @@ if __name__ == '__main__':
     parser.add_argument('--phase',
                         # default='train',
                         # default='inference',
-                        default='visualize',          # it is inference
                         help='train or inference')
 
     parser.add_argument('--config_name',
@@ -91,9 +99,13 @@ if __name__ == '__main__':
         train_model(model, train_data, val_data,
                     optimizer=optimizer, layers='all', coco_api=val_api, vis=vis)
 
-    elif args.phase == 'inference' or args.phase == 'visualize':
+    elif args.phase == 'inference':
 
         test_model(model, val_data, val_api, during_train=False, vis=vis)
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'evaluate'".format(args.phase))
+
+
+
+
