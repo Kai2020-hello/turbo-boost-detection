@@ -6,6 +6,13 @@ from tools.image_utils import *
 from tools.utils import *
 import torch.nn as nn
 from lib.config import LAYER_REGEX, TEMP, CLASS_NAMES
+from tools.tsne.vtsne import VTSNE
+from tools.tsne.prepare_data import prepare_data
+from tools.tsne.run import chunks
+
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib.patches import Ellipse
 
 # set CTRL.QUICK_VERIFY=False and DEBUG=False if you want to see one particular sample
 SEE_ONE_EXAMPLE = False
@@ -345,7 +352,11 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
         mode = model.config.CTRL.PHASE   # could be inference or visualize
         log_file = model.config.MISC.LOG_FILE
         det_res_file = model.config.MISC.DET_RESULT_FILE
+
         vis_res_folder = model.config.MISC.VIS_RESULT_FOLDER
+        _name = 'features_afew.pth' if model.config.TSNE.A_FEW else 'features.pth'
+        vis_file_name = os.path.join(vis_res_folder, _name)
+
         train_log_file = None
         save_im_folder = model.config.MISC.SAVE_IMAGE_DIR if model.config.TEST.SAVE_IM else None
 
@@ -363,17 +374,30 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
     t_prediction = 0
     t_start = time.time()
 
-    if model.config == 'inference' and os.path.exists(det_res_file):
+    skip = False
+    if det_res_file is not None and os.path.exists(det_res_file):
         print_log('results file: {} exists, skip inference and directly evaluate ...'.format(det_res_file),
                   log_file, additional_file=train_log_file)
         results = torch.load(det_res_file)['det_result']
-    else:
+        skip = True
+
+    if vis_file_name is not None and os.path.exists(vis_file_name):
+        print_log('results file: {} exists, skip visualize and directly TSNE ...'.format(vis_file_name),
+                  log_file, additional_file=train_log_file)
+        results = torch.load(vis_file_name)['feat_result']
+        skip = True
+
+    if not skip:
         print_log("Running COCO evaluation on {} images.".format(num_test_im), log_file, additional_file=train_log_file)
         assert (num_test_im % test_bs) % model.config.MISC.GPU_COUNT == 0, \
             '[INFERENCE/VISUALIZE] last mini-batch in an epoch is not divisible by gpu number.'
 
         results, cnt = [], 0
         total_iter = math.ceil(num_test_im / test_bs)
+        if mode == 'visualize' and model.config.TSNE.A_FEW:
+            total_iter = 20
+            num_test_im = total_iter * test_bs
+
         show_test_progress_base = math.floor(total_iter / (model.config.CTRL.SHOW_INTERVAL/2))
         # note that GPU efficiency is low when SAVE_IM=True
         for iter_ind in range(total_iter):
@@ -413,6 +437,7 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
                 if final_rois is None:
                     continue
                 for det_id in range(final_rois.shape[0]):
+                    # EACH INSTANCE
                     bbox = np.around(final_rois[det_id], 1)
                     if mode == 'inference':
                         final_masks = output_value
@@ -424,7 +449,7 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
                             "segmentation": maskUtils.encode(np.asfortranarray(final_masks[:, :, det_id]))
                         }
                     elif mode == 'visualize':
-                        final_feat = output_value
+                        final_feat = output_value[det_id]
                         curr_result = {
                             "image_id": curr_coco_id,
                             "category_id": dataset.get_source_class_id(final_class_ids[det_id], "coco"),
@@ -446,25 +471,23 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
             cnt += len(curr_image_ids)
 
             # show progress
-            if iter_ind % show_test_progress_base == 0 or cnt == len(image_ids):
+            if iter_ind % show_test_progress_base == 0 or cnt == num_test_im:
                 print_log('[{:s}][{:s}] {:s} progress \t{:4d} images /{:4d} total ...'.
-                          format(model.config.CTRL.CONFIG_NAME, model_file_name, mode, cnt, len(image_ids)),
-                          log_file, additional_file=train_log_file)
+                          format(model.config.CTRL.CONFIG_NAME, model_file_name, mode, cnt, num_test_im,
+                          log_file, additional_file=train_log_file))
         # DONE with the WHOLE EVAL IMAGES
 
         print_log("Prediction time (inference or visualize): {:.4f}. Average {:.4f} sec/image".format(
-            t_prediction, t_prediction / len(image_ids)), log_file, additional_file=train_log_file)
+            t_prediction, t_prediction / num_test_im), log_file, additional_file=train_log_file)
 
         if mode == 'inference':
             print_log('Saving results to {:s}'.format(det_res_file), log_file, additional_file=train_log_file)
             torch.save({'det_result': results}, det_res_file)
         elif mode == 'visualize':
-            file_name = os.path.join(vis_res_folder, 'features.pth')
-            print_log('Saving results to {:s}'.format(file_name), log_file, additional_file=train_log_file)
-            torch.save({'feat_result': results}, file_name)
+            print_log('Saving results to {:s}'.format(vis_file_name), log_file, additional_file=train_log_file)
+            torch.save({'feat_result': results}, vis_file_name)
 
-    SKIP_INFERENCE = True
-    if not SKIP_INFERENCE:
+    if not model.config.TSNE.SKIP_INFERENCE:
         # Evaluate
         print('\nBegin to evaluate ...')
         # Load results. This modifies results with additional attributes.
@@ -487,8 +510,65 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
 
     if mode == 'visualize':
         # TSNE finally!
-        pass
-        # raise NotImplementedError
+        pt_ver = '0.3'
+        draw_ellipse = True
+
+        n_points, pij, i, j, y = prepare_data(model.config, results)
+        tsne_model = VTSNE(n_points, model.config.TSNE.N_TOPICS, pt_ver=pt_ver)
+        optimizer = optim.Adam(model.parameters(), lr=1e-2)   # TODO: weight decay?
+
+        # train a tsne model and visualize it!
+        tsne_model.train()
+        total_loss = 0.0
+        batch_size = model.config.TSNE.TOTAL_EP
+        total_ep = model.config.TSNE.TOTAL_EP
+
+        for epoch in range(total_ep):
+
+            # ONE EPOCH
+            # fixme: remove the chunks method
+            for iter, data_batch in enumerate(chunks(batch_size, pij, i, j)):
+                if pt_ver == '0.3':
+                    data_batch = [Variable(torch.from_numpy(data).cuda()) for data in data_batch]
+                elif pt_ver == '0.4':
+                    pass
+                optimizer.zero_grad()
+                loss = tsne_model(*data_batch)
+                loss.backward()
+                optimizer.step()
+                if pt_ver == '0.3':
+                    total_loss += loss.data[0]
+                elif pt_ver == '0.4':
+                    total_loss += loss.item()
+
+            if epoch % 25 == 0:
+                print_log('[TSNE-train] epoch: {} \tLoss: {:.6e}'.format(
+                    epoch, total_loss / (len(pij) * 1.0)), log_file)
+
+            # draw the figure every epoch
+            embed = tsne_model.logits.weight.cpu().data.numpy()
+            f = plt.figure()
+            if draw_ellipse:
+                # Visualize with ellipses
+                var = np.sqrt(tsne_model.logits_lv.weight.clone().exp_().cpu().data.numpy())
+                ax = plt.gca()
+                for xy, (w, h), c in zip(embed, var, y):
+                    e = Ellipse(xy=xy, width=w, height=h, ec=None, lw=0.0)
+                    e.set_facecolor(plt.cm.Paired(c * 1.0 / y.max()))
+                    e.set_alpha(0.5)
+                    ax.add_artist(e)
+                ax.set_xlim(-9, 9)
+                ax.set_ylim(-9, 9)
+                plt.axis('off')
+                plt.savefig(os.path.join(vis_res_folder, 'scatter_{:03d}.png'.format(epoch)), bbox_inches='tight')
+                plt.close(f)
+
+            else:
+                plt.scatter(embed[:, 0], embed[:, 1], c=y * 1.0 / y.max())
+                plt.axis('off')
+                plt.savefig(os.path.join(vis_res_folder, 'scatter_{:03d}.png'.format(epoch)), bbox_inches='tight')
+                plt.close(f)
+        print_log('Done with training tsne; check the folder: {}!'.format(vis_res_folder), log_file)
 
 
 def _mold_inputs(model, image_ids, dataset):

@@ -393,6 +393,8 @@ def update_config_and_load_model(config, model, train_generator=None):
             # NOTE: it is called *folder*; not file!
             config.MISC.VIS_RESULT_FOLDER = os.path.join(config.MISC.RESULT_FOLDER,
                                                          'vis_result_{}'.format(model_suffix)).replace('.pth', '')
+            if not os.path.exists(config.MISC.VIS_RESULT_FOLDER):
+                os.makedirs(config.MISC.VIS_RESULT_FOLDER)
 
         if config.TEST.SAVE_IM:
             config.MISC.SAVE_IMAGE_DIR = os.path.join(config.MISC.RESULT_FOLDER, model_suffix.replace('.pth', ''))

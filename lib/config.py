@@ -249,6 +249,14 @@ class Config(object):
     CTRL.PROFILE_ANALYSIS = False  # show time for some pass
 
     # ==============================
+    TSNE = AttrDict()
+    TSNE.SKIP_INFERENCE = True
+    TSNE.A_FEW = False
+    TSNE.PERPLEXITY = 30
+    TSNE.METRIC = 'euclidean'
+    TSNE.N_TOPICS = 2
+
+    # ==============================
     MISC = AttrDict()
     MISC.SEED = 2000
     MISC.USE_VISDOM = False
@@ -291,6 +299,7 @@ class Config(object):
             self.DATA.IMAGE_MIN_DIM = 320
             self.DATA.IMAGE_MAX_DIM = 512
             self.CTRL.PROFILE_ANALYSIS = False
+            self.TSNE.A_FEW = True
 
         # set MISC.RESULT_FOLDER, 'results/base_101/train (or inference)/'
         self.MISC.RESULT_FOLDER = os.path.join(
