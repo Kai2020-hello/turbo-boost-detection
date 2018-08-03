@@ -113,40 +113,40 @@ def run_tsne():
     print('Done!')
 
 
-# PARAMS
-use_v = True
-draw_ellipse = True
-n_topics = 2
-total_ep = 500
-batch_size = 1024
-pt_ver = '0.3'
-
-choice = 'mnist'
-# PREPARE DATA
-n_points, pij, i, j, y = preprocess()
-print('use_v {}; batch_sizez {}; sample number {}; topic {}'.format(use_v, batch_size, n_points, n_topics))
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-# CREATE MODEL
-if use_v:
-    from tools.tsne.vtsne import VTSNE
-    model = VTSNE(n_points, n_topics, device=device, pt_ver=pt_ver)
-    result_folder = os.path.join('results', choice)
-else:
-    raise NotImplementedError
-    # from tools.tsne.tsne import TSNE
-    # model = TSNE(n_points, n_points)
-    # result_folder = 'res_not_v'
-
-if pt_ver == '0.3':
-    model = model.cuda()
-elif pt_ver == '0.4':
-    model = model.to(device)
-optimizer = optim.Adam(model.parameters(), lr=1e-2)
-
-if not os.path.exists(result_folder):
-    os.makedirs(result_folder)
-
-run_tsne()
+# # PARAMS
+# use_v = True
+# draw_ellipse = True
+# n_topics = 2
+# total_ep = 500
+# batch_size = 1024
+# pt_ver = '0.3'
+#
+# choice = 'mnist'
+# # PREPARE DATA
+# n_points, pij, i, j, y = preprocess()
+# print('use_v {}; batch_sizez {}; sample number {}; topic {}'.format(use_v, batch_size, n_points, n_topics))
+#
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# # CREATE MODEL
+# if use_v:
+#     from tools.tsne.vtsne import VTSNE
+#     model = VTSNE(n_points, n_topics, device=device, pt_ver=pt_ver)
+#     result_folder = os.path.join('results', choice)
+# else:
+#     raise NotImplementedError
+#     # from tools.tsne.tsne import TSNE
+#     # model = TSNE(n_points, n_points)
+#     # result_folder = 'res_not_v'
+#
+# if pt_ver == '0.3':
+#     model = model.cuda()
+# elif pt_ver == '0.4':
+#     model = model.to(device)
+# optimizer = optim.Adam(model.parameters(), lr=1e-2)
+#
+# if not os.path.exists(result_folder):
+#     os.makedirs(result_folder)
+#
+# run_tsne()
 
 

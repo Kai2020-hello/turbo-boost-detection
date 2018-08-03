@@ -224,8 +224,8 @@ class Config(object):
     DEV.BASELINE = False
 
     DEV.BIG_SUPERVISE = False
-    DEV.BIG_LOSS_CHOICE = 'ce'    # default setting (currently only support this)
-    DEV.BIG_FC_INIT = 'scratch'  # or 'coco_pretrain'
+    DEV.BIG_LOSS_CHOICE = 'ce'      # default setting (currently only support this)
+    DEV.BIG_FC_INIT = 'scratch'     # or 'coco_pretrain'
     DEV.BIG_LOSS_FAC = 1.
     DEV.BIG_FC_INIT_LIST = dict()
 
@@ -255,6 +255,11 @@ class Config(object):
     TSNE.PERPLEXITY = 30
     TSNE.METRIC = 'euclidean'
     TSNE.N_TOPICS = 2
+    TSNE.BATCH_SZ = 1024     # 1024    # bigger bs is more sparse
+    TSNE.TOTAL_EP = 150
+    TSNE.ELLIPSE = True
+    TSNE.SAMPLE_CHOICE = 'set1'   # for detailed config, see 'prepare_data.py'
+    TSNE.FIG_FOLDER_SUX = 'debug5'   # custom folder name
 
     # ==============================
     MISC = AttrDict()
