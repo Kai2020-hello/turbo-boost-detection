@@ -14,6 +14,17 @@ from tools.collections import AttrDict
 from past.builtins import basestring
 import numpy as np
 from ast import literal_eval
+import matplotlib.artist as artist
+
+
+def cus_set_alpha(e, alpha):
+    artist.Artist.set_alpha(e, alpha)
+    e._set_facecolor(e._original_facecolor)
+
+
+def mkdir_if_missing(folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
 
 def unique1d(variable):
@@ -379,20 +390,34 @@ def update_config_and_load_model(config, model, train_generator=None):
                 # indicate this is a pretrain model; init buffer as instructed in config
 
     elif phase == 'inference' or phase == 'visualize':
+
         tiny_diff = 'inference' if phase == 'inference' else 'visualize'
         model_name = os.path.basename(model_path).replace('.pth', '')   # mask_rcnn_ep_0053_iter_001234
-        config.MISC.LOG_FILE = os.path.join(config.MISC.RESULT_FOLDER,
-                                            '{:s}_from_{:s}.txt'.format(tiny_diff, model_name))
-        print_log('\nStart timestamp: {:%Y%m%dT%H%M}'.format(now), file=config.MISC.LOG_FILE, init=True)
         model_suffix = os.path.basename(model_path).replace('mask_rcnn_', '')
 
         if phase == 'inference':
+            config.MISC.LOG_FILE = os.path.join(config.MISC.RESULT_FOLDER,
+                                                '{:s}_from_{:s}.txt'.format(tiny_diff, model_name))
             config.MISC.DET_RESULT_FILE = os.path.join(config.MISC.RESULT_FOLDER,
                                                        'det_result_{:s}'.format(model_suffix))
         elif phase == 'visualize':
             # NOTE: it is called *folder*; not file!
+            # results/meta_105_quick_1_roipool/visualize/vis_result_ep_0013_iter_000619/
+                # features.pth
+                # set_1_xx/
+                #       scatter_xx.png
+                #       log.txt file HERE
             config.MISC.VIS_RESULT_FOLDER = os.path.join(config.MISC.RESULT_FOLDER,
                                                          'vis_result_{}'.format(model_suffix)).replace('.pth', '')
+            # figure folder to save
+            _suffix = '' if config.TSNE.FIG_FOLDER_SUX == '' else '_{}'.format(config.TSNE.FIG_FOLDER_SUX)
+            config.TSNE.VIS_RES_FIGURE = os.path.join(config.MISC.VIS_RESULT_FOLDER, '{}_bs_{}{}'.format(
+                config.TSNE.SAMPLE_CHOICE, config.TSNE.BATCH_SZ, _suffix))
+            mkdir_if_missing(config.TSNE.VIS_RES_FIGURE)
+
+            config.MISC.LOG_FILE = os.path.join(config.TSNE.VIS_RES_FIGURE, 'tsne_train_log.txt')
+
+        print_log('\nStart timestamp: {:%Y%m%dT%H%M}'.format(now), file=config.MISC.LOG_FILE, init=True)
 
         if config.TEST.SAVE_IM:
             config.MISC.SAVE_IMAGE_DIR = os.path.join(config.MISC.RESULT_FOLDER, model_suffix.replace('.pth', ''))

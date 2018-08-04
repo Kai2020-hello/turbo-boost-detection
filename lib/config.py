@@ -224,8 +224,8 @@ class Config(object):
     DEV.BASELINE = False
 
     DEV.BIG_SUPERVISE = False
-    DEV.BIG_LOSS_CHOICE = 'ce'    # default setting (currently only support this)
-    DEV.BIG_FC_INIT = 'scratch'  # or 'coco_pretrain'
+    DEV.BIG_LOSS_CHOICE = 'ce'      # default setting (currently only support this)
+    DEV.BIG_FC_INIT = 'scratch'     # or 'coco_pretrain'
     DEV.BIG_LOSS_FAC = 1.
     DEV.BIG_FC_INIT_LIST = dict()
 
@@ -247,6 +247,19 @@ class Config(object):
 
     CTRL.SHOW_INTERVAL = 50
     CTRL.PROFILE_ANALYSIS = False  # show time for some pass
+
+    # ==============================
+    TSNE = AttrDict()
+    TSNE.SKIP_INFERENCE = True
+    TSNE.A_FEW = False
+    TSNE.PERPLEXITY = 30
+    TSNE.METRIC = 'euclidean'
+    TSNE.N_TOPICS = 2
+    TSNE.BATCH_SZ = 1024     # 1024    # bigger bs is more sparse
+    TSNE.TOTAL_EP = 150
+    TSNE.ELLIPSE = True
+    TSNE.SAMPLE_CHOICE = 'set1'   # for detailed config, see 'prepare_data.py'
+    TSNE.FIG_FOLDER_SUX = 'debug5'   # custom folder name
 
     # ==============================
     MISC = AttrDict()
@@ -291,6 +304,7 @@ class Config(object):
             self.DATA.IMAGE_MIN_DIM = 320
             self.DATA.IMAGE_MAX_DIM = 512
             self.CTRL.PROFILE_ANALYSIS = False
+            self.TSNE.A_FEW = True
 
         # set MISC.RESULT_FOLDER, 'results/base_101/train (or inference)/'
         self.MISC.RESULT_FOLDER = os.path.join(

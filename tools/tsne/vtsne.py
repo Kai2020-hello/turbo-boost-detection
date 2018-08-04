@@ -1,6 +1,7 @@
 import torch
 import torch.autograd
 from torch import nn
+from torch.autograd import Variable
 
 
 def pairwise(data):
@@ -12,12 +13,18 @@ def pairwise(data):
 
 
 class VTSNE(nn.Module):
-    def __init__(self, n_points, n_topics, device):
+    def __init__(self, n_points, n_topics, **args):
         super(VTSNE, self).__init__()
+        if args['pt_ver'] == '0.3':
+            self.device = 'null'
+        elif args['pt_ver'] == '0.4':
+            self.device = args['device']
+
         # Logit of datapoint-to-topic weight
         self.logits_mu = nn.Embedding(n_points, n_topics)
         self.logits_lv = nn.Embedding(n_points, n_topics)
-        self.device = device
+        self.n_points = n_points
+        self.n_topics = n_topics
     
     @property
     def logits(self):
@@ -28,7 +35,10 @@ class VTSNE(nn.Module):
         # https://github.com/pytorch/examples/blob/master/vae/main.py
         std = logvar.mul(0.5).exp_()
         eps = torch.FloatTensor(std.size()).normal_()
-        eps = eps.to(self.device)
+        if self.device == 'null':
+            eps = Variable(eps.cuda(), requires_grad=True)
+        else:
+            eps = eps.to(self.device)
         z = eps.mul(std).add_(mu)
         kld = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
         kld = torch.sum(kld).mul_(-0.5)

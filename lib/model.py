@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import tools.utils as utils
 from lib.OT_module import OptTrans
 from tools.image_utils import parse_image_meta
+from tools.tsne.vtsne import VTSNE
 
 
 EPS = 1e-20
@@ -82,6 +83,7 @@ class MaskRCNN(nn.Module):
         #             for p in m.parameters():
         #                 p.requires_grad = False
         #     self.apply(set_bn_fix)
+
 
     def _initialize_weights(self):
 

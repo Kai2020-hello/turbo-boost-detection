@@ -1,3 +1,5 @@
+eval_sss.py
+*.npy
 *local_pc*/
 *_mask.c
 .DS_Store
