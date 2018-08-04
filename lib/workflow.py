@@ -542,6 +542,7 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
         print_log('begin to train! sample_num {}, feat_dim {}, pij shape {}, i/j shape {}'.format(
             n_points, 1024, pij.shape, i.shape
         ), log_file)
+
         for epoch in range(total_ep):
 
             # ONE EPOCH
