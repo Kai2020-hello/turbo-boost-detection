@@ -250,7 +250,7 @@ class Config(object):
 
     # ==============================
     TSNE = AttrDict()
-    TSNE.SKIP_INFERENCE = True
+    TSNE.SKIP_INFERENCE = True    # skip the evaluation (compute mAP)
     TSNE.A_FEW = False
     TSNE.PERPLEXITY = 30
     TSNE.METRIC = 'euclidean'
@@ -258,7 +258,7 @@ class Config(object):
     TSNE.BATCH_SZ = 1024     # 1024    # bigger bs is more sparse
     TSNE.TOTAL_EP = 150
     TSNE.ELLIPSE = True
-    TSNE.SAMPLE_CHOICE = 'set1'   # for detailed config, see 'prepare_data.py'
+    TSNE.SAMPLE_CHOICE = 'set1'   # for detailed config, see 'def prepare_data()' in tools/tsne/prepare_data.py
     TSNE.FIG_FOLDER_SUX = 'debug5'   # custom folder name
 
     # ==============================

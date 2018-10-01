@@ -25,8 +25,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--config_file',
                         # default=None)
-                        default='configs/105/meta_105_quick_1_roipool.yaml')
-                        # default='configs/meta_101_quick_3.yaml')
+                        # default='configs/105/meta_105_quick_1_roipool.yaml')   # mAP 42.x
+                        default='configs/105/meta_105_quick_1.yaml')  # mAP 45.x
+                        # default='configs/105/meta_105_quick_7.1.yaml')   # mAP 31.x
 
     # debug mode: set train_data to val_data for faster data loading.
     # show loss step by step; smaller input image size

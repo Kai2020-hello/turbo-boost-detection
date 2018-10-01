@@ -85,6 +85,7 @@ def prepare_data(config, dataset, results, log_file):
     perplexity = config.TSNE.PERPLEXITY
     # TODO: transfer to GPU tensor
 
+    # TODO(mid): change to other metric other than euclidean
     dist2 = pairwise_distances(new_data, metric=metric, squared=True)
     # This return a n x (n-1) prob array
     pij = manifold.t_sne._joint_probabilities(dist2, perplexity, False)

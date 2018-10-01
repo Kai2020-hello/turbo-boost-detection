@@ -40,7 +40,12 @@ Results for bounding box and segmentation on COCO are reported based on the defa
 TODO: more results to come
 
 
+### Misc
 
+To transfer from server to local machine:
+```
+    scp -r s42:/DATA/hyli/project/turbo-boost-detection/results/your_folder .
+```
 
 
 

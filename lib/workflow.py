@@ -522,9 +522,10 @@ def test_model(input_model, valset, coco_api, limit=-1, image_ids=None, **args):
         # FETCH DATA
         print_log('make samples from {}\n'.format(vis_file_name), log_file)
         n_points, pij, i, j, y, sample_size, label_list = prepare_data(
-            model.config, dataset, results, log_file)
+            model.config, dataset, results, log_file)    # pji is the output data for TSNE;
 
         print_log('create TSNE model ...\n', log_file)
+        # TODO (mid): apply multi-gpu in training TSNE
         tsne_model = VTSNE(n_points, model.config.TSNE.N_TOPICS, pt_ver=pt_ver)
         if pt_ver == '0.3':
             tsne_model = tsne_model.cuda()

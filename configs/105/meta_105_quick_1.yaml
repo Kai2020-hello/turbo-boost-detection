@@ -22,5 +22,13 @@ CTRL:
 MISC:
   USE_VISDOM: True
   VIS:
-    PORT: 2035
+    PORT: 2042
+# change the following
+MODEL:
+  INIT_FILE_CHOICE: 'results/meta_105_quick_1/train/mask_rcnn_ep_0002_iter_001238.pth'
+TSNE:
+  PERPLEXITY: 30
+  BATCH_SZ: 3000
+  TOTAL_EP: 200
+  FIG_FOLDER_SUX: 'sep27_final1'
 
