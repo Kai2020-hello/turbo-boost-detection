@@ -84,7 +84,6 @@ class MaskRCNN(nn.Module):
         #                 p.requires_grad = False
         #     self.apply(set_bn_fix)
 
-
     def _initialize_weights(self):
 
         for m in self.modules():

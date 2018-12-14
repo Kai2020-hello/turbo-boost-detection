@@ -316,6 +316,7 @@ class Dev(nn.Module):
                                                   stride=2, padding=1, output_padding=1)
                 upsample_num = 4 if self.config.DEV.MULTI_UPSAMPLER else 1
 
+                # the make-up layer in the paper
                 self.upsample = nn.ModuleList()
                 for i in range(upsample_num):
                     self.upsample.append(nn.Sequential(*[
@@ -341,6 +342,7 @@ class Dev(nn.Module):
                     nn.BatchNorm2d(1024),
                     nn.ReLU(inplace=True)
                 ]
+                # the critic module in the feature intertwiner
                 # shape: say 40, 1024, 1, 1
                 self.feat_extract = nn.Sequential(*_layer_list)
                 # define last_op, for ot, there is none
